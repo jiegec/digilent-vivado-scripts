@@ -109,10 +109,7 @@ add_files -quiet -norecurse -fileset constrs_1 $repo_path/src/constraints
 # TODO: handle multiple block designs
 set ipi_tcl_files [glob -nocomplain "$repo_path/src/bd/*.tcl"]
 set ipi_bd_files [glob -nocomplain "$repo_path/src/bd/*/*.bd"]
-if {[llength $ipi_tcl_files] > 1} {
-    # TODO: quit and log the error
-    puts "ERROR: This script cannot handle projects containing more than one block design! More than one tcl script foudn in src/bd"
-} elseif {[llength $ipi_tcl_files] == 1} {
+if {[llength $ipi_tcl_files] > 0} {
     # Use TCL script to rebuild block design
     puts "INFO: Rebuilding block design from script"
     # Create local source directory for bd
@@ -129,7 +126,13 @@ if {[llength $ipi_tcl_files] > 1} {
     set origin_dir [pwd]
     cd "[file rootname $xpr_path].srcs/sources_1"
     set run_remote_bd_flow 0
-    source [lindex $ipi_tcl_files 0]
+    foreach tcl_file $ipi_tcl_files {
+        source $tcl_file
+    }
+    set generated_bd_files [glob -nocomplain bd/*/*.bd]
+    foreach bd_file $generated_bd_files {
+        open_bd_design $bd_file
+    }
     cd $origin_dir
 } elseif {[llength $ipi_bd_files] > 1} {
     # TODO: quit and log the error
@@ -157,13 +160,15 @@ foreach ip [get_ips -filter "IS_LOCKED==1"] {
 # Generate the wrapper for the root design
 catch {
 	# catch block prevents projects without a block design from erroring at this step
-	set bd_name [get_bd_designs -of_objects [get_bd_cells /]]
-	set bd_file [get_files $bd_name.bd]
-	set wrapper_file [make_wrapper -files $bd_file -top -force]
-	import_files -quiet -force -norecurse $wrapper_file
+	set bd_names [get_bd_designs]
+    foreach bd_name $bd_names {
+        set bd_file [get_files $bd_name.bd]
+        set wrapper_file [make_wrapper -files $bd_file -top -force]
+        import_files -quiet -force -norecurse $wrapper_file
 
-	set obj [get_filesets sources_1]
-	set_property "top" "${bd_name}_wrapper" $obj
+        set obj [get_filesets sources_1]
+        set_property "top" "${bd_name}_wrapper" $obj
+    }
 }
 
 # Create 'synth_1' run (if not found)
